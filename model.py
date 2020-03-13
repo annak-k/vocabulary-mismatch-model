@@ -32,10 +32,12 @@ class Agent(object):
 
         return probs
     
-agent1 = Agent("CAN")
-agent2 = Agent("US")
-context1 = ["LAMP", "PEN", "BANANA"]
-context2 = ["SODAPOP", "PEN", "BANANA"]
-context3 = ["TOQUE", "CAP", "PEN"]
+    
+if __name__ == "__main__":
+    agent1 = Agent("CAN")
+    agent2 = Agent("US")
+    context1 = ["LAMP", "PEN", "BANANA"]
+    context2 = ["SODAPOP", "PEN", "BANANA"]
+    context3 = ["TOQUE", "CAP", "PEN"]
 
-print(agent1.produce(context3, agent2))
+    print(agent1.produce(context3, agent2))
