@@ -1,12 +1,12 @@
 import numpy as np
 
 class Agent(object):
-    def __init__(self, dialect):
+    def __init__(self, dialect, lambda_param=0.9):
         lexfile = np.genfromtxt("{}_lexicon.csv".format(dialect), delimiter=',', dtype="unicode")
         self.objects = [str(o) for o in lexfile[0,1:]]
         self.expressions = [str(e) for e in lexfile[1:,0]]
         self.lexicon = np.array(lexfile[1:,1:], dtype=np.float64)
-        self.params = {"speaker weight": 0.5, "addressee weight": 0.5, "lambda": 0.9}
+        self.params = {"speaker weight": 0.5, "addressee weight": 0.5, "lambda": lambda_param}
 
     def produce(self, context, addressee):
         self_literal = self.literal_listen(context)
@@ -15,7 +15,7 @@ class Agent(object):
         probs = {}
 
         for word in set(self_literal).union(set(addressee_literal)):
-            utility = (self.params["speaker weight"]*self_literal.get(word, 0) +
+            utility = (self.params["speaker weight"]*self_literal.get(word, 0) *
                         self.params["addressee weight"]*addressee_literal.get(word, 0))
             probs[word] = np.exp(self.params["lambda"]*utility)
 
