@@ -5,16 +5,16 @@ class Agent(object):
         lexfile = np.genfromtxt("{}_lexicon.csv".format(dialect), delimiter=',', dtype="unicode")
         self.objects = [str(o) for o in lexfile[0,1:]]
         self.expressions = [str(e) for e in lexfile[1:,0]]
-        self.lexicon = np.array(lexfile[1:,1:], dtype=np.float64)
+        self.preferences = np.array(lexfile[1:,1:], dtype=np.float64)
         
-        # TODO: remove me -- makes all lexicons the same :)
-        if not preferences:
-            self.lexicon[self.lexicon > 0] = 1
+        # Made lexicon binary and added preferences file.
+        self.lexicon = np.array(lexfile[1:,1:], dtype=np.float64)
+        self.lexicon[self.lexicon > 0] = 1
         self.params = {
-            "speaker weight": 0.4,
-            "addressee weight": 0.4,
+            "speaker weight": 0.45,
+            "addressee weight": 0.45,
             "lambda": lambda_param,
-            "length cost weight": 0.2
+            "length cost weight": 0.1
         }
 
 #     def produce(self, context, addressee):
@@ -45,11 +45,11 @@ class Agent(object):
     ### EXPERIMENTAL: ADDITIONAL LAYER OF RECURSION FOR PRAGMATIC SPEAKER ### 
     
     def literal_listen_matrix(self, context):
-        probs = np.empty_like(self.lexicon)
+        probs = np.empty_like(self.preferences)
         for o, curr_object in enumerate(self.objects):
             for w, word in enumerate(self.expressions):
-                if curr_object in context and self.lexicon[w][o] > 0:
-                    probs[w, o] = self.lexicon[w][o] * 1/len(context)
+                if curr_object in context and self.preferences[w][o] > 0:
+                    probs[w, o] = self.preferences[w][o] * 1/len(context)
                 else:
                     probs[w, o] = 0
         probs = np.array([row / np.sum(row) if np.sum(row) > 0 else row
@@ -59,7 +59,7 @@ class Agent(object):
     
     
     def pragmatic_listen_matrix(self, context, speaker):
-        probs = np.zeros_like(self.lexicon)
+        probs = np.zeros_like(self.preferences)
         for i in range(len(context)):
             curr_context = [context[i]] + context[:i] + context[i+1:]
             curr_word_probs = speaker.produce_matrix(curr_context, self, recurse=False)
@@ -102,7 +102,45 @@ class Agent(object):
                           for row in probs.T]).T
         return {expression: prob for expression, prob in zip(self.expressions, probs[:, 0])
                 if prob > 0}
-            
+
+
+    ### EXPERIMENTAL: ALTERNATIVE VERSION WITH COMBINED VOCABULARY
+    
+    def literal_listen_matrix_mutant(self, context, other):
+        mutant_lexicon = self.lexicon + other.lexicon
+        mutant_lexicon[mutant_lexicon > 1] = 1
+        probs = np.empty_like(mutant_lexicon)
+        for o, curr_object in enumerate(self.objects):
+            for w, word in enumerate(self.expressions):
+                if curr_object in context and mutant_lexicon[w][o] > 0:
+                    probs[w, o] = mutant_lexicon[w][o] * 1/len(context)
+                else:
+                    probs[w, o] = 0
+        probs = np.array([row / np.sum(row) if np.sum(row) > 0 else row
+                          for row in probs])
+        # probs = np.log(probs)
+        return probs 
+    
+    def produce_matrix_mutant(self, context, addressee, recurse=False, length_cost=False):
+        self_listener = self.literal_listen_matrix(context)
+        addressee_listener = self.literal_listen_matrix_mutant(context, addressee)
+        
+        probs = np.empty((len(self.expressions), len(context)))
+
+        for c, curr_object in enumerate(context):
+            for w, word in enumerate(self.expressions):
+                o = self.objects.index(curr_object)
+                if self_listener[w, o] >= 0 or addressee_listener[w, o] >= 0:
+                    utility = (self.params["addressee weight"]*addressee_listener[w, o] * np.mean(
+                               [addressee.preferences[w, o], self.preferences[w, o]]))
+                    if length_cost:
+                        utility *= self.params["length cost weight"] / len(word.split("_"))
+                    probs[w, c] = self.params["lambda"]*utility
+        probs = np.array([row / np.sum(row) if np.sum(row) != 0 else row
+                          for row in probs.T]).T
+        return {expression: prob for expression, prob in zip(self.expressions, probs[:, 0])
+                if prob > 0}
+    
 
     
     
