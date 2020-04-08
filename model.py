@@ -118,7 +118,7 @@ class Agent(object):
                     probs[w, o] = 0
         probs = np.array([row / np.sum(row) if np.sum(row) > 0 else row
                           for row in probs])
-        # probs = np.log(probs)
+        probs = np.where(probs > 0.0000001, np.log(probs), np.NaN)
         return probs 
     
     def produce_matrix_mutant(
@@ -132,16 +132,16 @@ class Agent(object):
         for c, curr_object in enumerate(context):
             for w, word in enumerate(self.expressions):
                 o = self.objects.index(curr_object)
-                if (self_listener[w, o] >= 0 or
-                    addressee_listener[w, o] >= 0):
-                    utility = (self.params["addressee weight"]*
-                               addressee_listener[w, o] *
+                if (self_listener[w, o] != np.NaN or
+                    addressee_listener[w, o] != np.NaN):
+                    utility = (self.params["addressee weight"] +
+                               addressee_listener[w, o] +
                                np.mean(
                                    [addressee.preferences[w, o],
                                     self.preferences[w, o]]))
                     if length_cost:
-                        utility *= self.params["length cost weight"] / len(word.split("_"))
-                    probs[w, c] = self.params["lambda"]*utility
+                        utility += self.params["length cost weight"] - len(word.split("_"))
+                    probs[w, c] = np.where(not np.isnan(utility), np.exp(self.params["lambda"]*utility), 0)
         probs = np.array([row / np.sum(row) if np.sum(row) != 0 else row
                           for row in probs.T]).T
         return {expression: prob
