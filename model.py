@@ -1,7 +1,7 @@
 import numpy as np
 
 class Agent(object):
-    def __init__(self, dialect, lambda_param=0.9, preferences=True):
+    def __init__(self, dialect, lambda_param=0.9, speaker_weight=0.5, length_cost_weight=0.1, preferences=True):
         lexfile = np.genfromtxt("{}_lexicon.csv".format(dialect), delimiter=',', dtype="unicode")
         self.objects = [str(o) for o in lexfile[0,1:]]
         self.expressions = [str(e) for e in lexfile[1:,0]]
@@ -11,10 +11,9 @@ class Agent(object):
         self.lexicon = np.array(lexfile[1:,1:], dtype=np.float64)
         self.lexicon[self.lexicon > 0] = 1
         self.params = {
-            "speaker weight": 0.45,
-            "addressee weight": 0.45,
+            "speaker weight": speaker_weight,
             "lambda": lambda_param,
-            "length cost weight": 0.1
+            "length cost weight": length_cost_weight
         }
 
 #     def produce(self, context, addressee):
@@ -90,7 +89,7 @@ class Agent(object):
                 o = self.objects.index(curr_object)
                 if self_listener[w, o] >= 0 or addressee_listener[w, o] >= 0:
                     utility = (self.params["speaker weight"]*self_listener[w, o] +
-                               self.params["addressee weight"]*addressee_listener[w, o])
+                               (1 - self.params["speaker weight"])*addressee_listener[w, o])
                     if length_cost:
                         utility *= self.params["length cost weight"] / len(word.split("_"))
                     # probs[w, c] = np.exp(self.params["lambda"]*utility)
@@ -118,7 +117,6 @@ class Agent(object):
                     probs[w, o] = 0
         probs = np.array([row / np.sum(row) if np.sum(row) > 0 else row
                           for row in probs])
-        probs = np.where(probs > 0.0000001, np.log(probs), np.NaN)
         return probs 
 
 
@@ -152,8 +150,8 @@ class Agent(object):
     
     def produce_matrix_mutant(
             self, context, addressee, recurse=False, length_cost=False):
-        self_listener = self.literal_listen_matrix(context)
-        addressee_listener = self.literal_listen_matrix_mutant(
+        # self_listener = self.literal_listen_matrix(context)
+        combined_listener = self.literal_listen_matrix_mutant(
             context, addressee)
         
         probs = np.empty((len(self.expressions), len(context)))
@@ -161,30 +159,24 @@ class Agent(object):
         for c, curr_object in enumerate(context):
             for w, word in enumerate(self.expressions):
                 o = self.objects.index(curr_object)
-                if (self_listener[w, o] != np.NaN or
-                    addressee_listener[w, o] != np.NaN):
-                    utility = addressee_listener[w, o]
-                    if length_cost:
-                        utility += self.params["length cost weight"] - len(word.split("_"))
-                    score = np.where(
-                        not np.isnan(utility),
-                        np.exp(self.params["lambda"]*utility), 0)
-                    probs[w, c] = score * np.mean(
-                        [addressee.preferences[w, o], self.preferences[w, o]]) 
+
+                utility_combined = np.where(
+                    combined_listener[w, o] > 0.0000001, 
+                    np.log(combined_listener[w, o]), np.NaN)
+
+                utility_prefer = np.log(self.params["speaker weight"] * addressee.preferences[w, o] 
+                                        + (1 - self.params["speaker weight"]) * self.preferences[w, o])
+
+                utility_vmm = utility_combined + utility_prefer
+                if length_cost:
+                    utility_vmm += np.log(self.params["length cost weight"] / (self.params["length cost weight"] + len(word.split("_"))))
+
+                probs[w, c] = np.where(
+                    not np.isnan(utility_vmm),
+                    np.exp(self.params["lambda"] * utility_vmm), 0)
+
         probs = np.array([row / np.sum(row) if np.sum(row) != 0 else row
                           for row in probs.T]).T
         return {expression: prob
                 for expression, prob in zip(self.expressions, probs[:, 0])
                 if prob > 0}
-    
-
-    
-    
-if __name__ == "__main__":
-    agent1 = Agent("CAN")
-    agent2 = Agent("US")
-    context1 = ["LAMP", "PEN", "BANANA"]
-    context2 = ["SODAPOP", "PEN", "BANANA"]
-    context3 = ["TOQUE", "CAP", "PEN"]
-
-    print(agent1.produce(context3, agent2))
