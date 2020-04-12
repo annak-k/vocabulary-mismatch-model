@@ -120,6 +120,35 @@ class Agent(object):
                           for row in probs])
         probs = np.where(probs > 0.0000001, np.log(probs), np.NaN)
         return probs 
+
+
+#     def produce_matrix_mutant(
+#             self, context, addressee, recurse=False, length_cost=False):
+#         self_listener = self.literal_listen_matrix(context)
+#         addressee_listener = self.literal_listen_matrix_mutant(
+#             context, addressee)
+        
+#         probs = np.empty((len(self.expressions), len(context)))
+
+#         for c, curr_object in enumerate(context):
+#             for w, word in enumerate(self.expressions):
+#                 o = self.objects.index(curr_object)
+#                 if (self_listener[w, o] != np.NaN or
+#                     addressee_listener[w, o] != np.NaN):
+#                     utility = (self.params["addressee weight"] +
+#                                addressee_listener[w, o] +
+#                                np.mean(
+#                                    [addressee.preferences[w, o],
+#                                     self.preferences[w, o]]))
+#                     if length_cost:
+#                         utility += self.params["length cost weight"] - len(word.split("_"))
+#                     probs[w, c] = np.where(not np.isnan(utility), np.exp(self.params["lambda"]*utility), 0)
+#         probs = np.array([row / np.sum(row) if np.sum(row) != 0 else row
+#                           for row in probs.T]).T
+#         return {expression: prob
+#                 for expression, prob in zip(self.expressions, probs[:, 0])
+#                 if prob > 0}
+    
     
     def produce_matrix_mutant(
             self, context, addressee, recurse=False, length_cost=False):
@@ -134,14 +163,14 @@ class Agent(object):
                 o = self.objects.index(curr_object)
                 if (self_listener[w, o] != np.NaN or
                     addressee_listener[w, o] != np.NaN):
-                    utility = (self.params["addressee weight"] +
-                               addressee_listener[w, o] +
-                               np.mean(
-                                   [addressee.preferences[w, o],
-                                    self.preferences[w, o]]))
+                    utility = addressee_listener[w, o]
                     if length_cost:
                         utility += self.params["length cost weight"] - len(word.split("_"))
-                    probs[w, c] = np.where(not np.isnan(utility), np.exp(self.params["lambda"]*utility), 0)
+                    score = np.where(
+                        not np.isnan(utility),
+                        np.exp(self.params["lambda"]*utility), 0)
+                    probs[w, c] = score * np.mean(
+                        [addressee.preferences[w, o], self.preferences[w, o]]) 
         probs = np.array([row / np.sum(row) if np.sum(row) != 0 else row
                           for row in probs.T]).T
         return {expression: prob

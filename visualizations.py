@@ -1,6 +1,8 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
+LABELS_USED = []
+
 
 def make_pie_plot(label_to_score, add_other=False, multiply_by_100=True):
     LABEL_TO_COLOR = {
@@ -12,7 +14,18 @@ def make_pie_plot(label_to_score, add_other=False, multiply_by_100=True):
         "pug": "moccasin",
         "doggy": "gold",
         "black and white dog": "pink",
-        "little dog": "cornflowerblue"
+        "little dog": "cornflowerblue",
+        
+        "banana": "lightskyblue",
+        "soda": "lightgreen",
+        "pop": "plum",
+        "fries": "salmon",
+        "chips": "moccasin",
+        "crisps": "gold",
+        "toque": "pink",
+        "hat": "cornflowerblue",
+        "winter hat": "orange",
+        "cap": "yellowgreen"
     }
     labels = sorted(list(label_to_score.keys()))
     scores = [label_to_score[label] for label in labels]
@@ -23,11 +36,20 @@ def make_pie_plot(label_to_score, add_other=False, multiply_by_100=True):
         labels.append("other")
         scores.append(100 - np.sum(scores))
         
+    global LABELS_USED
+    LABELS_USED = []
+        
     def generate_label(percentage):
-        percentage_i, curr_percentage = 0, scores[0]
-        for i in range(1, len(scores)):
-            if abs(scores[i] - percentage) < abs(curr_percentage - percentage):
+        global LABELS_USED
+        percentage_i, curr_percentage = None, None
+        for i in range(0, len(scores)):
+            if i in LABELS_USED:
+                continue
+            if (percentage_i is None) or (
+                    abs(scores[i] - percentage) < abs(curr_percentage - percentage)):
                 percentage_i, curr_percentage = i, scores[i]
+        LABELS_USED.append(percentage_i)
+        print(LABELS_USED)
         return f'{labels[percentage_i]}\n{percentage:.1f}%'
     
     plt.pie(
