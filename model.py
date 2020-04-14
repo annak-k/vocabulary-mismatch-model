@@ -1,7 +1,7 @@
 import numpy as np
 
 class Agent(object):
-    def __init__(self, dialect, lambda_param=0.9, speaker_weight=0.5, length_cost_weight=0.1, preferences=True):
+    def __init__(self, dialect, lambda_param=0.9, speaker_weight=0.5, length_cost_smoothing=0.1, preferences=True):
         lexfile = np.genfromtxt("{}_lexicon.csv".format(dialect), delimiter=',', dtype="unicode")
         self.objects = [str(o) for o in lexfile[0,1:]]
         self.expressions = [str(e) for e in lexfile[1:,0]]
@@ -13,7 +13,7 @@ class Agent(object):
         self.params = {
             "speaker weight": speaker_weight,
             "lambda": lambda_param,
-            "length cost weight": length_cost_weight
+            "length cost smoothing": length_cost_smoothing
         }
 
 #     def produce(self, context, addressee):
@@ -44,11 +44,11 @@ class Agent(object):
     ### EXPERIMENTAL: ADDITIONAL LAYER OF RECURSION FOR PRAGMATIC SPEAKER ### 
     
     def literal_listen_matrix(self, context):
-        probs = np.empty_like(self.preferences)
+        probs = np.zeros_like(self.preferences)
         for o, curr_object in enumerate(self.objects):
             for w, word in enumerate(self.expressions):
-                if curr_object in context and self.preferences[w][o] > 0:
-                    probs[w, o] = self.preferences[w][o] * 1/len(context)
+                if curr_object in context and self.lexicon[w][o] > 0:
+                    probs[w, o] = self.lexicon[w, o] * 1/len(context)
                 else:
                     probs[w, o] = 0
         probs = np.array([row / np.sum(row) if np.sum(row) > 0 else row
@@ -82,7 +82,7 @@ class Agent(object):
         # print(self_listener)
         # print(addressee_listener)
 
-        probs = np.empty((len(self.expressions), len(context)))
+        probs = np.zeros((len(self.expressions), len(context)))
 
         for c, curr_object in enumerate(context):
             for w, word in enumerate(self.expressions):
@@ -102,13 +102,29 @@ class Agent(object):
         return {expression: prob for expression, prob in zip(self.expressions, probs[:, 0])
                 if prob > 0}
 
+    def produce_matrix_plain(self, context):
+        listener = self.literal_listen_matrix(context)
+        probs = np.zeros((len(self.expressions), len(context)))
+        # print(listener)
+        for c, curr_object in enumerate(context):
+            for w, _ in enumerate(self.expressions):
+                o = self.objects.index(curr_object)
+                utility = np.where(listener[w, o] > 0.00001, np.log(listener[w, o]), np.NaN)
+                if listener[w, o] > 0:
+                    probs[w, c] = np.where(not np.isnan(utility), np.exp(self.params["lambda"]*utility), 0)
+        # print(probs)
+        probs = np.array([row / np.sum(row) if np.sum(row) != 0 else row
+                          for row in probs.T]).T
+        # print(probs)
+        return {expression: prob for expression, prob in zip(self.expressions, probs[:, 0])
+                if prob > 0}
 
     ### EXPERIMENTAL: ALTERNATIVE VERSION WITH COMBINED VOCABULARY
     
     def literal_listen_matrix_mutant(self, context, other):
         mutant_lexicon = self.lexicon + other.lexicon
         mutant_lexicon[mutant_lexicon > 1] = 1
-        probs = np.empty_like(mutant_lexicon)
+        probs = np.zeros_like(mutant_lexicon)
         for o, curr_object in enumerate(self.objects):
             for w, word in enumerate(self.expressions):
                 if curr_object in context and mutant_lexicon[w][o] > 0:
@@ -154,22 +170,25 @@ class Agent(object):
         combined_listener = self.literal_listen_matrix_mutant(
             context, addressee)
         
-        probs = np.empty((len(self.expressions), len(context)))
+        probs = np.zeros((len(self.expressions), len(context)))
 
         for c, curr_object in enumerate(context):
             for w, word in enumerate(self.expressions):
                 o = self.objects.index(curr_object)
 
                 utility_combined = np.where(
-                    combined_listener[w, o] > 0.0000001, 
+                    combined_listener[w, o] > 0.00001, 
                     np.log(combined_listener[w, o]), np.NaN)
 
-                utility_prefer = np.log(self.params["speaker weight"] * addressee.preferences[w, o] 
-                                        + (1 - self.params["speaker weight"]) * self.preferences[w, o])
+                utility_prefer = np.where(
+                    addressee.preferences[w, o] > 0.00001 and self.preferences[w, o] > 0.00001, 
+                    np.log(self.params["speaker weight"] * addressee.preferences[w, o] 
+                           + (1 - self.params["speaker weight"]) * self.preferences[w, o]), 
+                    np.NaN)
 
                 utility_vmm = utility_combined + utility_prefer
                 if length_cost:
-                    utility_vmm += np.log(self.params["length cost weight"] / (self.params["length cost weight"] + len(word.split("_"))))
+                    utility_vmm += np.log(1 + self.params["length cost smoothing"] / (len(word.split("_")) + self.params["length cost smoothing"]))
 
                 probs[w, c] = np.where(
                     not np.isnan(utility_vmm),
