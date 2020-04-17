@@ -27,7 +27,8 @@ def make_pie_plot(label_to_score, add_other=False, multiply_by_100=True):
         "winter hat": "orange",
         "cap": "yellowgreen"
     }
-    labels = sorted(list(label_to_score.keys()))
+    labels = sorted([label for label, score in label_to_score.items()
+                     if score >= 0.01])
     scores = [label_to_score[label] for label in labels]
     if multiply_by_100:
         scores = [item * 100 for item in scores]

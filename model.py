@@ -1,7 +1,10 @@
 import numpy as np
 
 class Agent(object):
-    def __init__(self, dialect, lambda_param=0.9, speaker_weight=0.5, length_cost_smoothing=0.1, preferences=True):
+    def __init__(
+            self, dialect, lambda_param=0.9, speaker_weight=0.5,
+            length_cost_smoothing=0.1, preferences=True,
+            pragmatic_weight=1, pref_weight=1):
         lexfile = np.genfromtxt("{}_lexicon.csv".format(dialect), delimiter=',', dtype="unicode")
         self.objects = [str(o) for o in lexfile[0,1:]]
         self.expressions = [str(e) for e in lexfile[1:,0]]
@@ -13,7 +16,9 @@ class Agent(object):
         self.params = {
             "speaker weight": speaker_weight,
             "lambda": lambda_param,
-            "length cost smoothing": length_cost_smoothing
+            "length cost smoothing": length_cost_smoothing,
+            "pragmatic_weight": pragmatic_weight,
+            "pref_weight": pref_weight
         }
 
 #     def produce(self, context, addressee):
@@ -182,13 +187,27 @@ class Agent(object):
 
                 utility_prefer = np.where(
                     addressee.preferences[w, o] > 0.00001 and self.preferences[w, o] > 0.00001, 
-                    np.log(self.params["speaker weight"] * addressee.preferences[w, o] 
-                           + (1 - self.params["speaker weight"]) * self.preferences[w, o]), 
+                    np.log((1 - self.params["speaker weight"]) * addressee.preferences[w, o] +
+                           self.params["speaker weight"] * self.preferences[w, o]), 
                     np.NaN)
+#                 utility_prefer = (
+#                     (1 - self.params["speaker weight"]) * addressee.preferences[w, o] +
+#                     self.params["speaker weight"] * self.preferences[w, o])
 
-                utility_vmm = utility_combined + utility_prefer
+                utility_vmm = (self.params["pragmatic_weight"] * utility_combined +
+                               self.params["pref_weight"] * utility_prefer)
                 if length_cost:
-                    utility_vmm += np.log(1 + self.params["length cost smoothing"] / (len(word.split("_")) + self.params["length cost smoothing"]))
+#                     utility_vmm += np.log(
+#                         (1 + self.params["length cost smoothing"]) / 
+#                         (len(word.split("_")) + self.params["length cost smoothing"]))
+#                     utility_vmm += (
+#                         (1 + self.params["length cost smoothing"]) / 
+#                         (len(word.split("_")) + self.params["length cost smoothing"]))
+
+                    utility_vmm += (self.params["length cost smoothing"] *
+                                    np.log(1 / len(word.split("_"))))
+#                     utility_vmm += (
+#                         self.params["length cost smoothing"] / len(word.split("_")))
 
                 probs[w, c] = np.where(
                     not np.isnan(utility_vmm),
@@ -199,3 +218,4 @@ class Agent(object):
         return {expression: prob
                 for expression, prob in zip(self.expressions, probs[:, 0])
                 if prob > 0}
+    
