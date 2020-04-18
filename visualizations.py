@@ -50,12 +50,10 @@ def make_pie_plot(label_to_score, add_other=False, multiply_by_100=True):
                     abs(scores[i] - percentage) < abs(curr_percentage - percentage)):
                 percentage_i, curr_percentage = i, scores[i]
         LABELS_USED.append(percentage_i)
-        print(LABELS_USED)
         return f'{labels[percentage_i]}\n{percentage:.1f}%'
     
     plt.pie(
         scores,
-        #labels=labels,
         autopct=generate_label,
         colors=[LABEL_TO_COLOR[label] for label in labels])
     plt.show()
